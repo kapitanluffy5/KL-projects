@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: MIT
+ 
+pragma solidity 0.8.23;
+contract SafeContract {
+    mapping(address => uint) private balances;
+    bool private reentrancyLock;
+
+    modifier nonReentrant() {
+        require(!reentrancyLock, "Reentrant call detected!");
+        reentrancyLock = true;
+        _;
+        reentrancyLock = false;
+    }
+
+    function deposit() public payable nonReentrant {
+        balances[msg.sender] += msg.value;
+    }
+
+    function withdraw(uint amount) public nonReentrant {
+        require(balances[msg.sender] >= amount, "Insufficient balance.");
+        (bool success, ) = msg.sender.call{value: amount}("");
+        require(success, "Transfer failed.");
+        balances[msg.sender] -= amount;
+    }
+}
+
+interface IERC165 {
+    function supportinterface(bytes4 interfaceId) external view returns  (bool);   
+}
+interface IERC721 is IERC165 {
+    function balanceOf(address owner) external view returns (uint256 balance);
+    function OwnerOf (uint tokenId) external view returns (address owner);
+    function safeTransferFrom (address from, address to, uint256 tokenId) external;
+    function safeTransferFrom (address from, address to, uint256 tokenId, bytes calldata data) external;
+    function transferFrom(address from , address to , uint256 tokenId) external;
+    function approve (address to, uint256 tokenId) external;
+    function getApproved(uint256 tokenId) external view returns (address operator);
+    function SetApprovalForAll (address operator, bool _approved) external;
+    function IsApprovedForAll(address owner, address operator ) external view returns (bool);
+}
+ 
+interface IERC721Receiver {
+        function onERC721Received(address operator, address from , uint256 tokenId, bytes calldata data ) 
+        external  returns (bytes4);
+}
+contract ERC721 is IERC721 , SafeContract {
+    uint256  constant tokenId = 1;   
+    event Transfer  (address from, address to , uint indexed id);
+    event Approval (address owner , address spender ,uint indexed id);
+    event ApprovalForAall (address indexed owner , address indexed operator, bool approved);
+    mapping(uint256 => address) _ownerOf;
+    mapping(address => uint256 )_balanceOf;
+    mapping(uint256 => address)_approvals;
+    mapping(address => mapping(address => bool)) public IsApprovedForAll;
+    function supportinterface( bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == type(IERC721).interfaceId || interfaceId == type(IERC165).interfaceId;   
+    }
+    function OwnerOf (uint id) external  view returns (address owner)  {
+        id = tokenId;
+        owner = _ownerOf[id];
+        require( owner != address(0), "token dose not exist");
+    }
+    function balanceOf (address owner) external view returns (uint256) {
+        require(owner != address(0), "owner = zero address");
+        return _balanceOf[owner];
+    }
+    function SetApprovalForAll(address operator, bool _approved) external nonReentrant() { 
+        IsApprovedForAll[msg.sender][operator] = _approved;
+        emit ApprovalForAall(msg.sender, operator, _approved);
+    }
+    function approve (address spender , uint id) external nonReentrant() {
+        id = tokenId;
+        require( spender != address(0), "token dose not exist");
+        address owner = _ownerOf[id];
+        require(msg.sender == owner || IsApprovedForAll[owner][msg.sender], "not outhorized");
+        _approvals[id] = spender;
+        emit Approval(owner, spender, id);
+    }
+    function getApproved( uint id) external view returns (address) {
+        id = tokenId;
+        require(_ownerOf[id] != address(0), "token dose not exist");
+        return _approvals[id];
+    }
+    function _isApprovedOrOwner ( address owner, address spender, uint256 id) internal view returns (bool) {
+        id = tokenId;
+        return (spender == owner || IsApprovedForAll[owner][spender] || spender == _approvals[id]); 
+    }
+    function transferFrom(address from,address to,  uint256 id) public nonReentrant() {
+        id = tokenId;
+        require( from != address(0), "token dose not exist");
+         require(msg.sender == from, "Caller is not the owner");
+        require(from == _ownerOf[id], "not owner");
+        require(to != address(0), "transfer to zero address");
+        require(_isApprovedOrOwner(from, msg.sender, id), "not authorized");
+        _balanceOf[from] -= id;
+        _balanceOf[to]++;
+        _ownerOf[id] = to;
+        delete _approvals[id];
+        emit Transfer(from, to, id);   
+    }
+     function safeTransferFrom(address from,address to, uint256 id) external nonReentrant() {
+        id = tokenId;
+        transferFrom(from, to, id);
+        require(to.code.length == 0 || IERC721Receiver(to).onERC721Received(msg.sender, from, id, "") 
+        == IERC721Receiver.onERC721Received.selector, "unsafe recipient" );
+     }
+     function safeTransferFrom(address from, address to , uint256 id, bytes calldata data) external nonReentrant() {
+        id = tokenId;
+        transferFrom(from, to, id);
+         require(to.code.length == 0 || IERC721Receiver(to).onERC721Received(msg.sender, from, id, data) 
+        == IERC721Receiver.onERC721Received.selector, "unsafe recipient" );    
+     }
+     function MINT(address to,uint256 id)  internal nonReentrant() {
+        id = tokenId;
+        require(msg.sender == to, "Caller is not the owner");  
+        require(to != address (0), "mint to address zero");
+        require(_ownerOf[id] == address(0), "already minted");
+        _balanceOf[to ]++ ;
+        emit Transfer(address(0), to, id);   
+     }
+     function BURN(uint256 id)internal nonReentrant()   {
+        id = tokenId;
+        address owner = _ownerOf[id];
+         require(msg.sender == owner, "Caller is not the owner");
+        require(owner != address(0), "not burned");
+        _balanceOf[owner] -=1;
+        delete _ownerOf[id];
+        delete _approvals[id];
+        emit Transfer(owner, address(0), id);
+
+     }
+}
+contract myNFT is ERC721 {
+    function mint (address to, uint256 id) external payable nonReentrant() {
+        MINT(to,id);
+    }
+    function burn (uint256 id )external nonReentrant() {
+        require(msg.sender == _ownerOf[id], "not owner");
+        BURN(id);
+    }        
+}
