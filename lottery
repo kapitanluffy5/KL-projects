@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+ contract  lottery {
+     event GrantRole(bytes32 indexed role, address indexed account);
+    event RevokeRole(bytes32 indexed role, address indexed account);
+     mapping(bytes32 => mapping(address => bool)) public roles;
+     address []  public practitioners;
+     
+
+    bytes32 public constant ADMIN = keccak256(abi.encodePacked("ADMIN"));
+    address private admin;
+    constructor () {
+        admin = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
+        emit GrantRole(ADMIN, admin);
+    }
+   
+    function AccessToLoterry () external payable  {
+        require(msg.value == 1 ether, "not enougth eth");
+        
+        practitioners.push(msg.sender);   
+    }
+    function RandomWinner() public view returns (address) {
+        require(practitioners.length > 0, "No practitioners in the lottery");
+        
+         uint256 _winner = uint256(uint(keccak256(abi.encodePacked(block.timestamp)))) % practitioners.length;
+         return practitioners[_winner];
+         
+        }
+        
+    
+    function TransferPrize() public  {
+        require(admin == msg.sender);
+    require(address(this).balance > 0, "No balance to transfer");
+    address   winner = RandomWinner();
+    address payable  wiinerPayable = payable(winner);
+     (bool succes,)= wiinerPayable.call{value: address(this).balance}("");
+     require(succes);
+    }
+    
+    
+}
