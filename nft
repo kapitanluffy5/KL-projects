@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
  
-pragma solidity 0.8.23;
+pragma solidity ^0.8.0;
 contract SafeContract {
     mapping(address => uint) private balances;
     bool private reentrancyLock;
@@ -44,7 +44,7 @@ interface IERC721Receiver {
         external  returns (bytes4);
 }
 contract ERC721 is IERC721 , SafeContract {
-    uint256  constant tokenId = 1;   
+    uint256  tokenId ;   
     event Transfer  (address from, address to , uint indexed id);
     event Approval (address owner , address spender ,uint indexed id);
     event ApprovalForAall (address indexed owner , address indexed operator, bool approved);
@@ -131,6 +131,9 @@ contract ERC721 is IERC721 , SafeContract {
      }
 }
 contract myNFT is ERC721 {
+    constructor(uint256 id) {
+        tokenId = id;
+    }
     function mint (address to, uint256 id) external payable nonReentrant() {
         MINT(to,id);
     }
